@@ -67,6 +67,9 @@ while (true)
         case "search":
             await GetAnimsFromSearch(arguments[1]);
             break;
+        case "anim-info":
+            await GetAnimInfo(arguments[1]);
+            break;
         default:
             DisplayError($"Команды {arguments[0]} не существует.");
             break;
@@ -341,6 +344,73 @@ async Task GetAnimsFromSearch(string query)
                         Console.WriteLine(author);
                         Console.WriteLine($"ID: {animationId}");
                         Console.WriteLine();
+                    }
+                }
+            }
+        }
+        catch (Exception e) { DisplayError($"Произошла ошибка: {e}"); }
+    }
+}
+
+async Task GetAnimInfo(string animID)
+{
+    using (HttpClient client = new HttpClient())
+    {
+        try
+        {
+            string mainPageHTML = await client.GetStringAsync("https://www.multverse.ru/view.php?id=" + animID);
+
+            var doc = new HtmlDocument();
+            doc.LoadHtml(mainPageHTML);
+
+            HtmlNodeCollection elements = doc.DocumentNode.SelectNodes("//table[contains(., 'Дата публикации:')]");
+
+            if (elements != null)
+            {
+                foreach (HtmlNode elem in elements)
+                {
+                    if (elem != null)
+                    {
+                        HtmlNode authorNode = elem.SelectSingleNode(".//a[contains(@href, 'profile.php')]/h3");
+                        
+                        string author = authorNode != null ? authorNode.InnerText.Trim() : "Не указан";
+
+                        HtmlNode dateNode = elem.SelectSingleNode(".//text()[contains(., 'Дата публикации:')]");
+                        string date = "Не указана";
+                        if (dateNode != null)
+                        {
+                            date = dateNode.InnerText.Replace("Дата публикации:", "").Trim();
+                        }
+
+                        string rating = "0.0";
+                        try
+                        {
+                            string ratingUrl = $"https://multverse.ru/rating.php?id={animID}&type=anim";
+                            string ratingHTML = await client.GetStringAsync(ratingUrl);
+
+                            var ratingDoc = new HtmlDocument();
+                            ratingDoc.LoadHtml(ratingHTML);
+
+                            HtmlNode ratingNode = ratingDoc.DocumentNode.SelectSingleNode("//*[contains(@style, 'color')]");
+                            if (ratingNode != null)
+                            {
+                                rating = ratingNode.InnerText.Trim().Replace("\n", "");
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            rating = "Ошибка в получении рейтинга";
+                        }
+
+                        var hashtagNodes = elem.SelectNodes(".//a[contains(@href, 'search') or contains(@href, 'tag')]");
+                        string tags = hashtagNodes != null
+                            ? string.Join(", ", hashtagNodes.Select(n => n.InnerText.Trim()))
+                            : "нет";
+
+                        Console.WriteLine($"Автор: {author}");
+                        Console.WriteLine($"Дата публикации: {date}");
+                        Console.WriteLine(rating);
+                        Console.WriteLine($"Хештеги: {tags}");
                     }
                 }
             }
